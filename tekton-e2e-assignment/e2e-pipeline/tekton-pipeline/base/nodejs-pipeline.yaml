@@ -1,0 +1,103 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: nodejs-pipeline
+spec:
+  params:
+    - name: next-app
+      type: string
+      description: Application name
+    - name: source-code-repo
+      type: string
+      description: Source code repository
+    - name: sha                                            # support new param
+      type: string
+      description: Precise SHA of the commit to build
+      default: ""
+    - name: docker-image
+      type: string
+      description: Docker image repository
+  workspaces:
+    - name: pipeline-shared-data
+  tasks:
+    - name: clone-repository
+      params:
+        - name: url
+          value: "$(params.source-code-repo)"
+        - name: revision
+          value: "$(params.sha)"                           # use new param
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: pipeline-shared-data
+    - name: run-tests
+      runAfter:
+        - clone-repository
+      taskRef:
+        name: npm
+      params:
+        - name: ARGS
+          value:
+            - install-ci-test
+      workspaces:
+        - name: source
+          workspace: pipeline-shared-data
+    - name: build-and-push-image
+      runAfter:
+        - run-tests
+      taskRef:
+        kind: ClusterTask
+        name: buildah
+      params:
+        - name: IMAGE
+          value: "$(params.docker-image):$(tasks.clone-repository.results.commit)"
+      workspaces:
+        - name: source
+          workspace: pipeline-shared-data
+    - name: create-envorinment-config
+      runAfter:
+        - build-and-push-image
+      taskRef:
+        name: kustomize
+      params:
+        - name: app-name
+          value: "$(params.next-app)"
+        - name: app-namespace
+          value: "$(context.pipelineRun.namespace)"
+        - name: source-code-repo
+          value: "$(params.source-code-repo)"
+        - name: commit
+          value: "$(tasks.clone-repository.results.commit)"
+        - name: docker-image
+          value: "$(params.docker-image)"
+      workspaces:
+        - name: source
+          workspace: pipeline-shared-data
+    - name: try-to-deploy
+      runAfter:
+        - create-envorinment-config
+      taskRef:
+        name: try-to-deploy
+      params:
+        - name: next-app
+          value: "$(params.next-app)"
+        - name: next-app-namespace
+          value: "$(context.pipelineRun.namespace)"
+      workspaces:
+        - name: source
+          workspace: pipeline-shared-data
+    - name: update-description-of-prod-env
+      runAfter:
+        - try-to-deploy
+      taskRef:
+        name: commit-manifest
+      params:
+        - name: next-app
+          value: "$(params.next-app)"
+        - name: sha
+          value: "$(tasks.clone-repository.results.commit)"
+      workspaces:
+        - name: source
+          workspace: pipeline-shared-data
