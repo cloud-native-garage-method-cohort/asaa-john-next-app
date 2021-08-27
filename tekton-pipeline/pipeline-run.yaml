@@ -3,22 +3,23 @@ kind: PipelineRun
 metadata:
   generateName: next-app-run-
 spec:
-  pipelineRef:
-    name: next-app
   params:
-    - name: app-name
-      value: next-app
-    - name: source-repo
+    - name: source-code-repo
       value: https://github.com/cloud-native-garage-method-cohort/asaa-john-next-app/tree/main/tekton-e2e-assignment
-    - name: image-repo
+    - name: deployment-name
+      value: next-app
+    - name: deployment-namespace
+      value: "$(context.pipelineRun.namespace)"
+    - name: docker-image
       value: quay.io/john_sourg/next-app
-  serviceAccountName: build-bot
+  pipelineRef:
+    name: next-app-pipeline
   workspaces:
-    - name: pipeline-shared-data
+    - name: pipeline-shared-workspace
       volumeClaimTemplate:
         spec:
           accessModes:
             - ReadWriteOnce
           resources:
             requests:
-              storage: 1Gi
+              storage: 100Mi
