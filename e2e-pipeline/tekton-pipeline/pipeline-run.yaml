@@ -1,0 +1,25 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: next-app-run-
+spec:
+  params:
+    - name: source-name
+      value: https://github.com/cloud-native-garage-method-cohort/asaa-john-next-app/tree/main/tekton-e2e-assignment
+    - name: deployment-name
+      value: app-name
+    - name: deployment-namespace
+      value: "$(context.pipelineRun.namespace)"
+    - name: image-repo
+      value: quay.io/john_sourg/next-app
+  pipelineRef:
+    name: nodejs-pipeline
+  workspaces:
+    - name: pipeline-shared-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 100Mi
